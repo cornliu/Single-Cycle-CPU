@@ -1,6 +1,7 @@
+// https://u.cyberlink.com/live/937601414790645567
 // Your code
 
-module CHIP(clk,
+module CHIP(clk, 
             rst_n,
             // For mem_D
             mem_wen_D,
@@ -581,9 +582,9 @@ endmodule
 
 module ALU(result, zero, In1, In2, control, mult_valid, mult_ready, mul_answer);
 output reg [31:0] result;
-output reg zero; //equal or not
+output reg zero; //equal or not for branch
 input [31:0] In1, In2;
-input [3:0] control ;
+input [3:0] control ; // control 要在哪看不確定
 output reg mult_valid;
 input  mult_ready;
 input [63:0] mul_answer ;
@@ -645,9 +646,10 @@ endmodule
 module ALU_control(ALUOp, bit_30, bit_25, function3, control);
 input bit_30;
 input bit_25; 
-input [2:0] ALUOp ;
+input [2:0] ALUOp ; // 為什麼是三碼不太確定
 input [2:0] function3;
-output [3:0] control ;
+// 看起來這段是類似某個 kmap?
+output [3:0] control ; // 輸出 ALU output
 assign control[0] = ALUOp[2] & ALUOp[1] & (!ALUOp[0]) & function3[2];
 assign control[1] = function3[1] & ALUOp[1];
 assign control[2] = bit_25 & ALUOp[0] & ALUOp[1] & ALUOp[2] ;
@@ -656,6 +658,7 @@ endmodule
 
 // Imm Gen
 // only lw,sw,jal,jalr會用到這個機制，其他可以直接default
+// 把原本的 immediate extend 到 32 bits
 module Imm_Gen(Imm_Gen, Imm);
 input [31:0] Imm;
 output reg [31:0] Imm_Gen ;
@@ -719,11 +722,12 @@ end
 endmodule
 
 // mux for 32 bits
+// multiplxer
 module mux_32(Out, In0, In1, control);
     input [31:0] In0, In1;
     input control ;
     output [31:0] Out ;
-    assign Out = control ? In1 : In0 ;
+    assign Out = control ? In1 : In0 ; // control == 0 => In0, else => In1
 endmodule
 
 module mux_4_32(Out, In0, In1, control);

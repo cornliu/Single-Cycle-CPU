@@ -502,3 +502,152 @@ begin
     endcase
 end
 endmodule
+
+module ALU(result, zero, In1, In2, control, mult_valid, mult_ready, mul_answer);
+output reg [31:0] result;
+output reg zero; //equal or not for branch
+input [31:0] In1, In2;
+input [3:0] control ; // control 要在哪看不確定
+output reg mult_valid;
+input  mult_ready;
+input [63:0] mul_answer ;
+reg carry; 
+always@(*)
+begin
+    // default
+    result = 0 ;
+    carry = 0 ;
+    zero = 0 ;
+    mult_valid = 0 ;
+    case(control)
+        4'b0001:
+        begin
+            result = In1 >> In2 ;
+            zero = 0 ;
+        end
+        4'b0000: // add, addi 
+        begin
+            {carry,result} = $signed(In1) + $signed(In2) ; 
+            zero = 0 ;
+        end
+        4'b1000: // sub 
+        begin
+            {carry,result} = $signed(In1) - $signed(In2) ;
+            if (In1 == In2)
+                zero = 1 ;
+            else 
+                zero = 0 ;
+        end
+        4'b0010: //slt, slti 
+        begin
+            if ( $signed(In1) < $signed(In2) )
+                result = 1;
+            else 
+                result = 0;
+            zero = 0 ;
+        end
+        4'b0100: // mul 
+        begin
+            mult_valid = 1'b1 ;
+            if (mult_ready == 1)
+                result = mul_answer[31:0] ;
+            else
+                result = 0 ;
+            zero = 0 ;
+        end
+        default 
+        begin
+            zero = 0 ;
+            result = 0 ;
+            carry = 0 ;
+        end
+    endcase
+end
+endmodule
+
+// ALU control 
+module ALU_control(ALUOp, bit_30, bit_25, function3, control);
+input bit_30;
+input bit_25; 
+input [2:0] ALUOp ; // 為什麼是三碼不太確定
+input [2:0] function3;
+// 看起來這段是類似某個 kmap?
+output [3:0] control ; // 輸出 ALU output
+assign control[0] = ALUOp[2] & ALUOp[1] & (!ALUOp[0]) & function3[2];
+assign control[1] = function3[1] & ALUOp[1];
+assign control[2] = bit_25 & ALUOp[0] & ALUOp[1] & ALUOp[2] ;
+assign control[3] = (!ALUOp[2]) | (bit_30 & ALUOp[2] & ALUOp[1] & ALUOp[0] );
+endmodule
+
+// Imm Gen
+// 把原本的 immediate extend 到 64 bits，只有 lw, sw, jal, jalr 會用到這個機制，其他可以直接 default
+module Imm_Gen(Imm_Gen, Imm);
+input [31:0] Imm;
+output reg [31:0] Imm_Gen ;
+reg [6:0] Opcode;
+
+always@(*)
+begin
+    Opcode = Imm[6:0];
+    case(Opcode)
+    7'b0000011: //lw
+    begin
+        Imm_Gen[31:11] = {21{Imm[31]}} ;
+        Imm_Gen[10:5] = Imm[30:25];
+        Imm_Gen[4:1] = Imm[24:21];
+        Imm_Gen[0] = Imm[20] ; 
+    end
+    7'b0100011: //sw
+    begin
+        Imm_Gen[31:11] = {21{Imm[31]}} ;
+        Imm_Gen[10:5] = Imm[30:25];
+        Imm_Gen[4:1] = Imm[11:8];
+        Imm_Gen[0] = Imm[7] ;
+    end
+    7'b1101111: //jal
+    begin
+        Imm_Gen[31:20] = {12{Imm[31]}};
+        Imm_Gen[19:12] = Imm[19:12];
+        Imm_Gen[11] = Imm[20];
+        Imm_Gen[10:5] = Imm[30:25];
+        Imm_Gen[4:1] = Imm[24:21];
+        Imm_Gen[0] = 1'b0;
+    end
+    7'b1100111: //jalr
+    begin
+        Imm_Gen[31:11] = {21{Imm[31]}} ;
+        Imm_Gen[10:5] = Imm[30:25];
+        Imm_Gen[4:1] = Imm[24:21];
+        Imm_Gen[0] = Imm[20] ;
+    end
+    7'b1100011: //beq
+    begin
+        Imm_Gen[31:12] = {20{Imm[31]}} ;
+        Imm_Gen[11] = Imm[7];
+        Imm_Gen[10:5] = Imm[30:25];
+        Imm_Gen[4:1] = Imm[11:8];
+        Imm_Gen[0] = 0 ;
+    end
+    7'b0010011: //addi , slti
+    begin
+        Imm_Gen[31:11] = {21{Imm[31]}} ;
+        Imm_Gen[10:5] = Imm[30:25];
+        Imm_Gen[4:1] = Imm[24:21];
+        Imm_Gen[0] = Imm[20] ;
+    end
+    default
+    begin
+        Imm_Gen = 0 ;
+    end
+    endcase
+end
+endmodule
+
+// multiplxer for 32 bits
+module Mux_32(Output, Input0, Input1, Control);
+    input [31:0] Input0;
+    input [31:0] Input1;
+    input Control;
+    output [31:0] Output;
+    assign Output = Control ? Input1 : Input0; // Control == 0 => Input0, else => Input1
+endmodule
